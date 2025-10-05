@@ -9,3 +9,5 @@ zig-out/
 *.swo
 *~
 .DS_Store
+test_comprehensive
+test_tokenizer

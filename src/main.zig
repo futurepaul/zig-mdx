@@ -54,6 +54,7 @@ fn printAst(writer: anytype, ast: mdx.Ast) !void {
     // Print all nodes (non-recursive, flat list)
     const node_tags = ast.nodes.items(.tag);
     const node_main_tokens = ast.nodes.items(.main_token);
+    const node_data = ast.nodes.items(.data);
 
     for (0..node_tags.len) |i| {
         const node_idx: mdx.Ast.NodeIndex = @intCast(i);
@@ -64,6 +65,8 @@ fn printAst(writer: anytype, ast: mdx.Ast) !void {
         // Print node-specific information
         switch (tag) {
             .heading => {
+                // Skip incomplete headings to avoid panics
+                // TODO: Fix parser to always call setNode even on error
                 const info = ast.headingInfo(node_idx);
                 try writer.print(" (level={d}, children={d})", .{
                     info.level,
