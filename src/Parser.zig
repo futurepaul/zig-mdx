@@ -47,8 +47,6 @@ pub fn parse(gpa: Allocator, source: [:0]const u8) !Ast {
     _ = root_node; // Root is always at index 0
 
     // Build final AST
-    const node_slice = parser.nodes.toOwnedSlice();
-
     var token_list = Ast.TokenList{};
     try token_list.ensureTotalCapacity(gpa, tokens.items.len);
     for (tokens.items) |tok| {
@@ -60,8 +58,8 @@ pub fn parse(gpa: Allocator, source: [:0]const u8) !Ast {
 
     return Ast{
         .source = source,
-        .tokens = token_list.slice(),
-        .nodes = node_slice,
+        .tokens = token_list,
+        .nodes = parser.nodes,
         .extra_data = try parser.extra_data.toOwnedSlice(),
         .errors = try parser.errors.toOwnedSlice(),
     };

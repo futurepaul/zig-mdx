@@ -6,8 +6,8 @@ const Allocator = std.mem.Allocator;
 /// Uses Structure-of-Arrays (MultiArrayList) for cache-efficient node storage,
 /// following the Zig compiler's design patterns.
 source: [:0]const u8,
-tokens: TokenList.Slice,
-nodes: NodeList.Slice,
+tokens: TokenList,
+nodes: NodeList,
 extra_data: []const u32,
 errors: []const Error,
 
@@ -172,12 +172,8 @@ pub const SmallSpan = union(enum) {
 };
 
 pub fn deinit(tree: *Ast, allocator: Allocator) void {
-    // Note: tokens and nodes are MultiArrayList.Slice which don't directly own memory
-    // The parse() function converts them via to OwnedSlice which means the memory
-    // is owned by the caller. For now, just free extra_data and errors.
-    // TODO: properly track and free MultiArrayList memory
-    _ = tree.tokens;
-    _ = tree.nodes;
+    tree.tokens.deinit(allocator);
+    tree.nodes.deinit(allocator);
 
     if (tree.extra_data.len > 0) {
         allocator.free(tree.extra_data);
@@ -195,7 +191,6 @@ pub fn children(tree: Ast, node: NodeIndex) []const NodeIndex {
     const n = tree.nodes.get(node);
     return switch (n.tag) {
         .document,
-        .heading,
         .paragraph,
         .blockquote,
         .list_unordered,
@@ -203,11 +198,18 @@ pub fn children(tree: Ast, node: NodeIndex) []const NodeIndex {
         .list_item,
         .strong,
         .emphasis,
-        .mdx_jsx_element,
         .mdx_jsx_fragment,
         => {
             const range = n.data.children;
             return @as([]const NodeIndex, @ptrCast(tree.extra_data[range.start..range.end]));
+        },
+        .heading => {
+            const info = tree.headingInfo(node);
+            return @as([]const NodeIndex, @ptrCast(tree.extra_data[info.children_start..info.children_end]));
+        },
+        .mdx_jsx_element => {
+            const elem = tree.jsxElement(node);
+            return @as([]const NodeIndex, @ptrCast(tree.extra_data[elem.children_start..elem.children_end]));
         },
         else => &[_]NodeIndex{},
     };
@@ -217,7 +219,7 @@ pub fn children(tree: Ast, node: NodeIndex) []const NodeIndex {
 pub fn tokenSlice(tree: Ast, token_index: TokenIndex) []const u8 {
     const token_starts = tree.tokens.items(.start);
     const start = token_starts[token_index];
-    const end = if (token_index + 1 < token_starts.len)
+    const end = if (token_index + 1 < tree.tokens.len)
         token_starts[token_index + 1]
     else
         @as(u32, @intCast(tree.source.len));
@@ -243,7 +245,7 @@ pub fn nodeSource(tree: Ast, node_index: NodeIndex) []const u8 {
     };
 
     const start = token_starts[start_token];
-    const end = if (end_token < token_starts.len)
+    const end = if (end_token < tree.tokens.len)
         token_starts[end_token]
     else
         @as(u32, @intCast(tree.source.len));
