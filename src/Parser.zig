@@ -307,10 +307,22 @@ fn parseHeading(p: *Parser) !Ast.NodeIndex {
 
     // Reserve node for children
     const node_index = try p.reserveNode(.heading);
-    errdefer p.unreserveNode(node_index);
 
-    // Parse inline content
-    const children_span = try p.parseInlineContent(.newline);
+    // Parse inline content - if this fails, we still need to set the node
+    const children_span = p.parseInlineContent(.newline) catch |err| {
+        // Set node with empty children to avoid leaving incomplete node
+        const empty_heading = try p.addExtra(Ast.Heading{
+            .level = level,
+            .children_start = 0,
+            .children_end = 0,
+        });
+        _ = p.setNode(node_index, .{
+            .tag = .heading,
+            .main_token = heading_token,
+            .data = .{ .extra = empty_heading },
+        });
+        return err;
+    };
 
     const heading_index = try p.addExtra(Ast.Heading{
         .level = level,
@@ -330,10 +342,17 @@ fn parseParagraph(p: *Parser) !Ast.NodeIndex {
 
     // Reserve node
     const node_index = try p.reserveNode(.paragraph);
-    errdefer p.unreserveNode(node_index);
 
     // Parse inline content until newline or blank line
-    const children_span = try p.parseInlineContent(.newline);
+    const children_span = p.parseInlineContent(.newline) catch |err| {
+        // Set node with empty children to avoid leaving incomplete node
+        _ = p.setNode(node_index, .{
+            .tag = .paragraph,
+            .main_token = start_token,
+            .data = .{ .children = .{ .start = 0, .end = 0 } },
+        });
+        return err;
+    };
 
     return p.setNode(node_index, .{
         .tag = .paragraph,
@@ -390,9 +409,16 @@ fn parseStrong(p: *Parser) !Ast.NodeIndex {
     const start_token = p.nextToken(); // **
 
     const node_index = try p.reserveNode(.strong);
-    errdefer p.unreserveNode(node_index);
 
-    const children_span = try p.parseInlineContent(.strong_end);
+    const children_span = p.parseInlineContent(.strong_end) catch |err| {
+        // Set node with empty children to avoid leaving incomplete node
+        _ = p.setNode(node_index, .{
+            .tag = .strong,
+            .main_token = start_token,
+            .data = .{ .children = .{ .start = 0, .end = 0 } },
+        });
+        return err;
+    };
 
     return p.setNode(node_index, .{
         .tag = .strong,
@@ -405,9 +431,16 @@ fn parseEmphasis(p: *Parser) !Ast.NodeIndex {
     const start_token = p.nextToken(); // *
 
     const node_index = try p.reserveNode(.emphasis);
-    errdefer p.unreserveNode(node_index);
 
-    const children_span = try p.parseInlineContent(.emphasis_end);
+    const children_span = p.parseInlineContent(.emphasis_end) catch |err| {
+        // Set node with empty children to avoid leaving incomplete node
+        _ = p.setNode(node_index, .{
+            .tag = .emphasis,
+            .main_token = start_token,
+            .data = .{ .children = .{ .start = 0, .end = 0 } },
+        });
+        return err;
+    };
 
     return p.setNode(node_index, .{
         .tag = .emphasis,
@@ -520,12 +553,19 @@ fn parseBlockquote(p: *Parser) !Ast.NodeIndex {
     const start_token = p.nextToken(); // >
 
     const node_index = try p.reserveNode(.blockquote);
-    errdefer p.unreserveNode(node_index);
 
     // Skip space after >
     _ = p.eatToken(.space);
 
-    const children_span = try p.parseInlineContent(.newline);
+    const children_span = p.parseInlineContent(.newline) catch |err| {
+        // Set node with empty children to avoid leaving incomplete node
+        _ = p.setNode(node_index, .{
+            .tag = .blockquote,
+            .main_token = start_token,
+            .data = .{ .children = .{ .start = 0, .end = 0 } },
+        });
+        return err;
+    };
 
     return p.setNode(node_index, .{
         .tag = .blockquote,
@@ -543,13 +583,20 @@ fn parseList(p: *Parser) !Ast.NodeIndex {
 
     const start_token = p.token_index;
     const node_index = try p.reserveNode(list_tag);
-    errdefer p.unreserveNode(node_index);
 
     const scratch_top = p.scratch.items.len;
     defer p.scratch.shrinkRetainingCapacity(scratch_top);
 
     while (p.token_tags[p.token_index] == first_item_tag) {
-        const item = try p.parseListItem();
+        const item = p.parseListItem() catch |err| {
+            // On error, set node with empty children
+            _ = p.setNode(node_index, .{
+                .tag = list_tag,
+                .main_token = start_token,
+                .data = .{ .children = .{ .start = 0, .end = 0 } },
+            });
+            return err;
+        };
         try p.scratch.append(item);
     }
 
@@ -566,9 +613,16 @@ fn parseListItem(p: *Parser) !Ast.NodeIndex {
     const item_token = p.nextToken();
 
     const node_index = try p.reserveNode(.list_item);
-    errdefer p.unreserveNode(node_index);
 
-    const children_span = try p.parseInlineContent(.newline);
+    const children_span = p.parseInlineContent(.newline) catch |err| {
+        // Set node with empty children to avoid leaving incomplete node
+        _ = p.setNode(node_index, .{
+            .tag = .list_item,
+            .main_token = item_token,
+            .data = .{ .children = .{ .start = 0, .end = 0 } },
+        });
+        return err;
+    };
 
     return p.setNode(node_index, .{
         .tag = .list_item,
