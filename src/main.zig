@@ -52,13 +52,17 @@ fn printAst(writer: anytype, ast: mdx.Ast) !void {
     try writer.print("\n=== NODES ===\n", .{});
 
     // Print all nodes (non-recursive, flat list)
-    for (0..ast.nodes.len) |i| {
+    const node_tags = ast.nodes.items(.tag);
+    const node_main_tokens = ast.nodes.items(.main_token);
+
+    for (0..node_tags.len) |i| {
         const node_idx: mdx.Ast.NodeIndex = @intCast(i);
-        const node = ast.nodes.get(node_idx);
-        try writer.print("[{d}] {s}", .{ node_idx, @tagName(node.tag) });
+        const tag = node_tags[i];
+        const main_token = node_main_tokens[i];
+        try writer.print("[{d}] {s}", .{ node_idx, @tagName(tag) });
 
         // Print node-specific information
-        switch (node.tag) {
+        switch (tag) {
             .heading => {
                 const info = ast.headingInfo(node_idx);
                 try writer.print(" (level={d}, children={d})", .{
@@ -67,7 +71,7 @@ fn printAst(writer: anytype, ast: mdx.Ast) !void {
                 });
             },
             .text => {
-                const token_text = ast.tokenSlice(node.main_token);
+                const token_text = ast.tokenSlice(main_token);
                 const trimmed = if (token_text.len > 50) token_text[0..50] else token_text;
                 try writer.print(" \"{s}\"", .{trimmed});
             },
@@ -83,10 +87,11 @@ fn printAst(writer: anytype, ast: mdx.Ast) !void {
         try writer.print("\n", .{});
     }
 
-    // Print document tree from root
+    // Print document tree from root (document is always the last node)
     try writer.print("\n=== TREE ===\n", .{});
     if (ast.nodes.len > 0) {
-        try printNode(writer, ast, 0, 0);
+        const root_idx: mdx.Ast.NodeIndex = @intCast(ast.nodes.len - 1);
+        try printNode(writer, ast, root_idx, 0);
     }
 }
 

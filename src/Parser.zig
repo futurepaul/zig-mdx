@@ -34,9 +34,10 @@ pub fn parse(gpa: Allocator, source: [:0]const u8) !Ast {
         if (tok.tag == .eof) break;
     }
 
+
     // Phase 2: Parsing
     var parser = Parser.init(gpa, source, tokens.items);
-    defer parser.deinit();
+    defer parser.deinitExceptNodes();
 
     // Estimate node count (empirical ratio: 2:1 tokens to nodes)
     const estimated_node_count = @max(tokens.items.len / 2, 8);
@@ -94,6 +95,14 @@ fn deinit(p: *Parser) void {
     p.extra_data.deinit();
     p.scratch.deinit();
     p.errors.deinit();
+}
+
+fn deinitExceptNodes(p: *Parser) void {
+    p.gpa.free(p.token_tags);
+    p.gpa.free(p.token_starts);
+    // DON'T deinit nodes - they've been moved to the AST
+    p.scratch.deinit();
+    // DON'T deinit extra_data or errors - they've been converted to owned slices
 }
 
 // === Token consumption methods ===

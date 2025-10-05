@@ -7,6 +7,8 @@ index: u32,
 line_start: u32,
 mode: Mode,
 mode_stack: std.ArrayList(Mode),
+strong_depth: u32,
+emphasis_depth: u32,
 
 const Tokenizer = @This();
 
@@ -42,6 +44,8 @@ pub fn init(buffer: [:0]const u8, allocator: Allocator) Tokenizer {
         .line_start = 0,
         .mode = .markdown,
         .mode_stack = std.ArrayList(Mode).init(allocator),
+        .strong_depth = 0,
+        .emphasis_depth = 0,
     };
 }
 
@@ -167,6 +171,8 @@ fn nextMarkdown(self: *Tokenizer) Token {
                             self.index += 2;
                             return self.makeToken(.image_start, start);
                         }
+                        // Just a literal '!' - treat as text
+                        self.index += 1;
                         state = .text;
                     },
                     else => {
@@ -215,16 +221,37 @@ fn nextMarkdown(self: *Tokenizer) Token {
                     }
                 }
 
-                // Otherwise, treat as text
-                state = .text;
+                // Special case: * or ** at line start could be emphasis/strong
+                if (first_char == '*') {
+                    // Reset index to start and handle as emphasis/strong
+                    self.index = start + 1; // Move past first *
+                    state = .maybe_strong_or_emphasis;
+                } else {
+                    // Otherwise, treat as text
+                    state = .text;
+                }
             },
 
             .maybe_strong_or_emphasis => {
                 if (self.buffer[self.index] == '*') {
                     self.index += 1;
-                    return self.makeToken(.strong_start, start);
+                    // Check if we're closing or opening strong
+                    if (self.strong_depth > 0) {
+                        self.strong_depth -= 1;
+                        return self.makeToken(.strong_end, start);
+                    } else {
+                        self.strong_depth += 1;
+                        return self.makeToken(.strong_start, start);
+                    }
                 } else {
-                    return self.makeToken(.emphasis_start, start);
+                    // Check if we're closing or opening emphasis
+                    if (self.emphasis_depth > 0) {
+                        self.emphasis_depth -= 1;
+                        return self.makeToken(.emphasis_end, start);
+                    } else {
+                        self.emphasis_depth += 1;
+                        return self.makeToken(.emphasis_start, start);
+                    }
                 }
             },
 
