@@ -1,0 +1,55 @@
+{
+  "name": "zig-mdx",
+  "version": "0.1.0",
+  "description": "Blazing fast MDX parser powered by Zig and WebAssembly",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "bun run build.ts",
+    "test": "bun test",
+    "prepublishOnly": "bun run build"
+  },
+  "keywords": [
+    "mdx",
+    "markdown",
+    "parser",
+    "wasm",
+    "webassembly",
+    "zig",
+    "ast",
+    "jsx",
+    "fast",
+    "performance"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/zig-mdx.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/zig-mdx/issues"
+  },
+  "homepage": "https://github.com/yourusername/zig-mdx#readme",
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

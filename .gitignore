@@ -11,3 +11,8 @@ zig-out/
 .DS_Store
 test_comprehensive
 test_tokenizer
+
+# WASM package
+wasm/node_modules/
+wasm/dist/
+wasm/*.log

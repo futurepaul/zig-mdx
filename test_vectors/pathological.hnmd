@@ -95,6 +95,62 @@ Another HR
 * Star list with **bold**
 * Star list with *italic*
 
+1. Ordered list item one
+2. Ordered list item two
+3. Ordered list item three
+
+1. Ordered list with **bold**
+2. Ordered list with *italic*
+3. Ordered list with {state.nested.deep.value}
+4. Ordered list with ! exclamation
+
+10. Starting with double digits
+11. Continuing double digits
+12. More double digits
+
+1. Ordered list with `code`
+2. Ordered list with [link](url)
+3. Ordered list with ![image](img.jpg)
+
+### Mixed List Types
+
+- Unordered item
+- Another unordered
+
+1. Then ordered
+2. More ordered
+
+- Back to unordered
+- Still unordered
+
+### Ordered List Edge Cases
+
+1.Single digit no space after dot
+1.  Double space after dot
+999. Large number
+
+### Inline Code Tests
+
+This is `inline code` in a sentence.
+
+Multiple `code` in `one` line `here`.
+
+`Code` at start and at end `code`.
+
+Code with **bold `code` inside**.
+
+Code with *italic `code` inside*.
+
+### Image Alt Text Tests
+
+![Simple alt text](image.jpg)
+
+![Alt with **bold**](image2.jpg)
+
+![Alt with *italic*](image3.jpg)
+
+![Alt with {expression}](image4.jpg)
+
 ### Emphasis/Strong at Start of Line
 
 **Bold at line start**

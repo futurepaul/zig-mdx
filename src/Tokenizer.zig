@@ -16,6 +16,7 @@ pub const Mode = enum {
     markdown,
     jsx,
     expression,
+    inline_code,
 };
 
 const State = enum {
@@ -58,6 +59,7 @@ pub fn next(self: *Tokenizer) Token {
         .markdown => self.nextMarkdown(),
         .jsx => self.nextJsx(),
         .expression => self.nextExpression(),
+        .inline_code => self.nextInlineCode(),
     };
 }
 
@@ -110,6 +112,20 @@ fn nextMarkdown(self: *Tokenizer) Token {
                         }
                         return self.makeToken(.indent, indent_start);
                     },
+                    '0'...'9' => {
+                        // Check for ordered list (e.g., "1. ")
+                        var temp_index = self.index;
+                        while (temp_index < self.buffer.len and self.buffer[temp_index] >= '0' and self.buffer[temp_index] <= '9') {
+                            temp_index += 1;
+                        }
+                        if (temp_index < self.buffer.len and self.buffer[temp_index] == '.' and
+                            temp_index + 1 < self.buffer.len and self.buffer[temp_index + 1] == ' ')
+                        {
+                            self.index = temp_index + 2; // Skip digits, dot, and space
+                            return self.makeToken(.list_item_ordered, start);
+                        }
+                        state = .start;
+                    },
                     else => {
                         state = .start;
                     },
@@ -148,6 +164,9 @@ fn nextMarkdown(self: *Tokenizer) Token {
                     },
                     '`' => {
                         self.index += 1;
+                        self.pushMode(.inline_code) catch {
+                            return self.makeToken(.invalid, start);
+                        };
                         return self.makeToken(.code_inline_start, start);
                     },
                     '[' => {
@@ -417,6 +436,34 @@ fn nextExpression(self: *Tokenizer) Token {
             while (self.index < self.buffer.len) {
                 const ch = self.buffer[self.index];
                 if (ch == '{' or ch == '}' or ch == 0) break;
+                self.index += 1;
+            }
+            return self.makeToken(.text, start);
+        },
+    }
+}
+
+fn nextInlineCode(self: *Tokenizer) Token {
+    const start = self.index;
+
+    if (self.index >= self.buffer.len) {
+        return .{ .tag = .eof, .loc = .{ .start = @intCast(self.index), .end = @intCast(self.index) } };
+    }
+
+    const c = self.buffer[self.index];
+
+    switch (c) {
+        0 => return self.makeToken(.eof, start),
+        '`' => {
+            self.index += 1;
+            self.popMode();
+            return self.makeToken(.code_inline_end, start);
+        },
+        else => {
+            // Consume text until backtick
+            while (self.index < self.buffer.len) {
+                const ch = self.buffer[self.index];
+                if (ch == '`' or ch == 0) break;
                 self.index += 1;
             }
             return self.makeToken(.text, start);

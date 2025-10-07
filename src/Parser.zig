@@ -493,8 +493,9 @@ fn parseLink(p: *Parser) !Ast.NodeIndex {
 fn parseImage(p: *Parser) !Ast.NodeIndex {
     const start_token = p.nextToken(); // ![
 
-    const alt_token = if (p.token_tags[p.token_index] == .text)
-        p.nextToken()
+    // Parse alt text (same as link text)
+    const text_node = if (p.token_tags[p.token_index] == .text)
+        try p.parseText()
     else
         0;
 
@@ -506,7 +507,7 @@ fn parseImage(p: *Parser) !Ast.NodeIndex {
     _ = try p.expectToken(.link_url_end); // )
 
     const link_data = try p.addExtra(Ast.Link{
-        .text_node = alt_token,
+        .text_node = text_node,
         .url_token = url_token,
     });
 
