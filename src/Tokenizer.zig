@@ -17,6 +17,7 @@ pub const Mode = enum {
     jsx,
     expression,
     inline_code,
+    code_block,
 };
 
 const State = enum {
@@ -60,6 +61,7 @@ pub fn next(self: *Tokenizer) Token {
         .jsx => self.nextJsx(),
         .expression => self.nextExpression(),
         .inline_code => self.nextInlineCode(),
+        .code_block => self.nextCodeBlock(),
     };
 }
 
@@ -96,6 +98,9 @@ fn nextMarkdown(self: *Tokenizer) Token {
                     '`' => {
                         if (self.peekAhead("```")) {
                             self.index += 3;
+                            self.pushMode(.code_block) catch {
+                                return self.makeToken(.invalid, start);
+                            };
                             return self.makeToken(.code_fence_start, start);
                         }
                         state = .text;
@@ -464,6 +469,43 @@ fn nextInlineCode(self: *Tokenizer) Token {
             while (self.index < self.buffer.len) {
                 const ch = self.buffer[self.index];
                 if (ch == '`' or ch == 0) break;
+                self.index += 1;
+            }
+            return self.makeToken(.text, start);
+        },
+    }
+}
+
+fn nextCodeBlock(self: *Tokenizer) Token {
+    const start = self.index;
+
+    if (self.index >= self.buffer.len) {
+        return .{ .tag = .eof, .loc = .{ .start = @intCast(self.index), .end = @intCast(self.index) } };
+    }
+
+    const c = self.buffer[self.index];
+
+    // Check for closing fence at start of line
+    if (self.index == self.line_start and c == '`' and self.peekAhead("```")) {
+        self.index += 3;
+        self.popMode();
+        return self.makeToken(.code_fence_end, start);
+    }
+
+    switch (c) {
+        0 => return self.makeToken(.eof, start),
+        '\n' => {
+            self.index += 1;
+            self.line_start = self.index;
+            return self.makeToken(.newline, start);
+        },
+        else => {
+            // Consume text until newline or closing fence
+            while (self.index < self.buffer.len) {
+                const ch = self.buffer[self.index];
+                if (ch == '\n' or ch == 0) break;
+                // Check if we're at closing fence
+                if (self.index == self.line_start and ch == '`' and self.peekAhead("```")) break;
                 self.index += 1;
             }
             return self.makeToken(.text, start);

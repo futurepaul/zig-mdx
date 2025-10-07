@@ -151,6 +151,33 @@ Code with *italic `code` inside*.
 
 ![Alt with {expression}](image4.jpg)
 
+### Code Block Tests
+
+```typescript
+const greeting = "Hello, World!";
+console.log(greeting);
+```
+
+Code with no language:
+
+```
+plain text
+no syntax
+```
+
+Multiple blocks:
+
+```javascript
+function test() {
+  return true;
+}
+```
+
+```python
+def hello():
+    print("Hello")
+```
+
 ### Emphasis/Strong at Start of Line
 
 **Bold at line start**
