@@ -47,15 +47,15 @@ if (!result.success) {
 
 // Copy WASM file to dist
 console.log("📋 Copying WASM file...");
-const wasmSource = "./src/mdx.wasm";
+const wasmSource = "../zig-out/bin/zigmdx.wasm";
 const wasmDest = "./dist/mdx.wasm";
 
 if (existsSync(wasmSource)) {
   await copyFile(wasmSource, wasmDest);
   console.log("✅ WASM file copied");
 } else {
-  console.warn("⚠️  Warning: mdx.wasm not found in src/");
-  console.warn("   Run 'zig build wasm' from the root directory first");
+  console.warn("⚠️  Warning: zigmdx.wasm not found in ../zig-out/bin/");
+  console.warn("   Run 'zig build' from the root directory first");
 }
 
 const end = performance.now();

@@ -11,8 +11,11 @@ pub fn main() !void {
     defer std.process.argsFree(allocator, args);
 
     if (args.len < 2) {
-        const stderr = std.io.getStdErr().writer();
-        try stderr.print("Usage: {s} <file.hnmd>\n", .{args[0]});
+        var stderr_buffer: [1024]u8 = undefined;
+        var stderr_fbs = std.io.fixedBufferStream(&stderr_buffer);
+        const stderr_writer = stderr_fbs.writer();
+        try stderr_writer.print("Usage: {s} <file.hnmd>\n", .{args[0]});
+        _ = try std.fs.File.stderr().writeAll(stderr_fbs.getWritten());
         std.process.exit(1);
     }
 
@@ -22,11 +25,13 @@ pub fn main() !void {
     const file = try std.fs.cwd().openFile(filename, .{});
     defer file.close();
 
-    const source = try file.readToEndAllocOptions(allocator, std.math.maxInt(usize), null, @alignOf(u8), 0);
+    const source = try file.readToEndAllocOptions(allocator, std.math.maxInt(usize), null, .@"1", 0);
     defer allocator.free(source);
 
     // Parse
-    const stdout = std.io.getStdOut().writer();
+    var stdout_buffer: [16384]u8 = undefined;
+    var stdout_fbs = std.io.fixedBufferStream(&stdout_buffer);
+    const stdout = stdout_fbs.writer();
     try stdout.print("Parsing: {s}\n\n", .{filename});
 
     var ast = try mdx.parse(allocator, source);
@@ -42,6 +47,8 @@ pub fn main() !void {
             try stdout.print("  - {s} at token {d}\n", .{ @tagName(err.tag), err.token });
         }
     }
+
+    _ = try std.fs.File.stdout().writeAll(stdout_fbs.getWritten());
 }
 
 fn printAst(writer: anytype, ast: mdx.Ast) !void {
@@ -118,12 +125,12 @@ fn printNode(writer: anytype, ast: mdx.Ast, node_idx: mdx.Ast.NodeIndex, indent:
         },
         .mdx_text_expression, .mdx_flow_expression => {
             const range = ast.extraData(node.data.extra, mdx.Ast.Node.Range);
-            var expr_text = std.ArrayList(u8).init(std.heap.page_allocator);
-            defer expr_text.deinit();
+            var expr_text: std.ArrayList(u8) = .{};
+            defer expr_text.deinit(std.heap.page_allocator);
             for (range.start..range.end) |tok_idx| {
                 const tok_idx_u32: mdx.Ast.TokenIndex = @intCast(tok_idx);
                 const text = ast.tokenSlice(tok_idx_u32);
-                try expr_text.appendSlice(text);
+                try expr_text.appendSlice(std.heap.page_allocator, text);
             }
             try writer.print(" {{{s}}}", .{expr_text.items});
         },

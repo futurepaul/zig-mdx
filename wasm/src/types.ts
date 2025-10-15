@@ -17,145 +17,129 @@ export interface WasmExports {
   wasm_reset(): void;
 }
 
-export interface Token {
-  tag: string;
-  start: number;
-  end: number;
-}
-
 export interface ParseError {
   tag: string;
   token: number;
 }
 
 export interface BaseNode {
-  index: number;
   type: string;
-  mainToken: number;
 }
 
-export interface DocumentNode extends BaseNode {
-  type: "document";
-  children: number[];
+export interface RootNode extends BaseNode {
+  type: "root";
+  children: Node[];
 }
 
 export interface ParagraphNode extends BaseNode {
   type: "paragraph";
-  children: number[];
+  children: Node[];
 }
 
 export interface HeadingNode extends BaseNode {
   type: "heading";
   level: number;
-  childrenStart: number;
-  childrenEnd: number;
+  children: Node[];
 }
 
 export interface TextNode extends BaseNode {
   type: "text";
-  text: string;
+  value: string;
 }
 
 export interface LinkNode extends BaseNode {
   type: "link";
   url: string;
-  title?: string;
-  childrenStart: number;
-  childrenEnd: number;
+  children: Node[];
 }
 
 export interface ImageNode extends BaseNode {
   type: "image";
   url: string;
-  title?: string;
-  childrenStart: number;
-  childrenEnd: number;
+  children: Node[];
 }
 
 export interface CodeBlockNode extends BaseNode {
   type: "code_block";
   lang?: string;
-  text: string;
+  value: string;
 }
 
 export interface InlineCodeNode extends BaseNode {
   type: "code_inline";
-  text: string;
+  value: string;
 }
 
 export interface BlockquoteNode extends BaseNode {
   type: "blockquote";
-  children: number[];
+  children: Node[];
 }
 
 export interface ListNode extends BaseNode {
   type: "list_unordered" | "list_ordered";
-  children: number[];
+  children: Node[];
 }
 
 export interface ListItemNode extends BaseNode {
   type: "list_item";
-  children: number[];
+  children: Node[];
+}
+
+export interface JsxAttribute {
+  name: string;
+  type: "literal" | "expression";
+  value?: string;
 }
 
 export interface JsxElementNode extends BaseNode {
-  type: "mdx_jsx_element" | "mdx_jsx_self_closing";
+  type: "mdx_jsx_element";
   name: string;
-  children?: number[];
+  attributes: JsxAttribute[];
+  children: Node[];
+}
+
+export interface JsxSelfClosingNode extends BaseNode {
+  type: "mdx_jsx_self_closing";
+  name: string;
+  attributes: JsxAttribute[];
 }
 
 export interface JsxFragmentNode extends BaseNode {
   type: "mdx_jsx_fragment";
-  children: number[];
+  children: Node[];
 }
 
 export interface MdxTextExpressionNode extends BaseNode {
   type: "mdx_text_expression";
+  value: string;
 }
 
 export interface MdxFlowExpressionNode extends BaseNode {
   type: "mdx_flow_expression";
+  value: string;
 }
 
 export interface EmphasisNode extends BaseNode {
   type: "emphasis";
-  children: number[];
+  children: Node[];
 }
 
 export interface StrongNode extends BaseNode {
   type: "strong";
-  children: number[];
-}
-
-export interface HardBreakNode extends BaseNode {
-  type: "hard_break";
-}
-
-export interface SoftBreakNode extends BaseNode {
-  type: "soft_break";
+  children: Node[];
 }
 
 export interface ThematicBreakNode extends BaseNode {
-  type: "thematic_break";
-}
-
-export interface HtmlBlockNode extends BaseNode {
-  type: "html_block";
-  text: string;
-}
-
-export interface HtmlInlineNode extends BaseNode {
-  type: "html_inline";
-  text: string;
+  type: "hr";
 }
 
 export interface FrontmatterNode extends BaseNode {
   type: "frontmatter";
-  text: string;
+  value: string;
 }
 
 export type Node =
-  | DocumentNode
+  | RootNode
   | ParagraphNode
   | HeadingNode
   | TextNode
@@ -167,22 +151,16 @@ export type Node =
   | ListNode
   | ListItemNode
   | JsxElementNode
+  | JsxSelfClosingNode
   | JsxFragmentNode
   | MdxTextExpressionNode
   | MdxFlowExpressionNode
   | EmphasisNode
   | StrongNode
-  | HardBreakNode
-  | SoftBreakNode
   | ThematicBreakNode
-  | HtmlBlockNode
-  | HtmlInlineNode
-  | FrontmatterNode
-  | BaseNode;
+  | FrontmatterNode;
 
-export interface AST {
-  nodes: Node[];
-  tokens: Token[];
-  errors: ParseError[];
+export interface AST extends RootNode {
   source: string;
+  errors: ParseError[];
 }

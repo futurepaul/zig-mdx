@@ -2,6 +2,7 @@ const std = @import("std");
 const Token = @import("Token.zig");
 const Allocator = std.mem.Allocator;
 
+allocator: Allocator,
 buffer: [:0]const u8,
 index: u32,
 line_start: u32,
@@ -41,18 +42,19 @@ const State = enum {
 
 pub fn init(buffer: [:0]const u8, allocator: Allocator) Tokenizer {
     return .{
+        .allocator = allocator,
         .buffer = buffer,
         .index = 0,
         .line_start = 0,
         .mode = .markdown,
-        .mode_stack = std.ArrayList(Mode).init(allocator),
+        .mode_stack = .{},
         .strong_depth = 0,
         .emphasis_depth = 0,
     };
 }
 
 pub fn deinit(self: *Tokenizer) void {
-    self.mode_stack.deinit();
+    self.mode_stack.deinit(self.allocator);
 }
 
 pub fn next(self: *Tokenizer) Token {
@@ -547,7 +549,7 @@ fn makeToken(self: *Tokenizer, tag: Token.Tag, start: u32) Token {
 }
 
 fn pushMode(self: *Tokenizer, mode: Mode) !void {
-    try self.mode_stack.append(self.mode);
+    try self.mode_stack.append(self.allocator, self.mode);
     self.mode = mode;
 }
 

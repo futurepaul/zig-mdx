@@ -23,8 +23,21 @@ This is **MDX** with {dynamic} expressions!
 <CustomComponent prop="value" />
 `;
 
-const ast = parse(mdx);
-console.log(ast);
+const ast = await parse(mdx);
+
+// The AST is a nested tree structure
+console.log(ast.type); // "root"
+console.log(ast.children[0].type); // "heading"
+console.log(ast.children[0].level); // 1
+
+// Traverse the tree recursively
+function traverse(node) {
+  console.log(node.type);
+  if ('children' in node) {
+    node.children.forEach(traverse);
+  }
+}
+traverse(ast);
 ```
 
 ## Features
@@ -37,38 +50,102 @@ console.log(ast);
 
 ## API
 
-### `parse(source: string): AST`
+### `parse(source: string): Promise<AST>`
 
-Parses an MDX string and returns the Abstract Syntax Tree.
+Parses an MDX string and returns a nested tree structure representing the Abstract Syntax Tree.
 
 **Parameters:**
 - `source`: The MDX source code to parse
 
 **Returns:**
-- An `AST` object containing nodes, tokens, errors, and the source
+- A Promise resolving to an `AST` object with a nested tree structure
 
 ### AST Structure
 
+The parser returns a nested tree structure that's easy to traverse and consume:
+
 ```typescript
 interface AST {
-  nodes: Node[];
-  tokens: Token[];
-  errors: ParseError[];
-  source: string;
+  type: "root";
+  children: Node[];
+  source: string;       // Original source code
+  errors: ParseError[]; // Parse errors (if any)
 }
 
-interface Node {
-  index: number;
-  type: string;
-  mainToken: number;
-  // Additional properties depending on node type
-  children?: number[];
-  level?: number;        // For headings
-  text?: string;         // For text nodes
-  name?: string;         // For JSX elements
-  url?: string;          // For links/images
-  // ... and more
+// Example output
+{
+  "type": "root",
+  "children": [
+    {
+      "type": "heading",
+      "level": 1,
+      "children": [
+        { "type": "text", "value": "Hello World" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "A paragraph with " },
+        {
+          "type": "strong",
+          "children": [
+            { "type": "text", "value": "bold" }
+          ]
+        },
+        { "type": "text", "value": " text." }
+      ]
+    }
+  ],
+  "source": "# Hello World\n\nA paragraph with **bold** text.",
+  "errors": []
 }
+```
+
+### Node Types
+
+All node types with their properties:
+
+```typescript
+// Container nodes with children
+type ParagraphNode = { type: "paragraph", children: Node[] }
+type HeadingNode = { type: "heading", level: number, children: Node[] }
+type BlockquoteNode = { type: "blockquote", children: Node[] }
+type ListNode = { type: "list_unordered" | "list_ordered", children: Node[] }
+type ListItemNode = { type: "list_item", children: Node[] }
+type EmphasisNode = { type: "emphasis", children: Node[] }
+type StrongNode = { type: "strong", children: Node[] }
+
+// Leaf nodes with values
+type TextNode = { type: "text", value: string }
+type CodeBlockNode = { type: "code_block", lang?: string, value: string }
+type InlineCodeNode = { type: "code_inline", value: string }
+type FrontmatterNode = { type: "frontmatter", value: string }
+type MdxExpressionNode = {
+  type: "mdx_text_expression" | "mdx_flow_expression",
+  value: string
+}
+
+// Link and image nodes
+type LinkNode = { type: "link", url: string, children: Node[] }
+type ImageNode = { type: "image", url: string, children: Node[] }
+
+// JSX nodes
+type JsxElementNode = {
+  type: "mdx_jsx_element",
+  name: string,
+  attributes: JsxAttribute[],
+  children: Node[]
+}
+type JsxSelfClosingNode = {
+  type: "mdx_jsx_self_closing",
+  name: string,
+  attributes: JsxAttribute[]
+}
+type JsxFragmentNode = { type: "mdx_jsx_fragment", children: Node[] }
+
+// Other
+type ThematicBreakNode = { type: "hr" }
 ```
 
 ## Supported MDX Features

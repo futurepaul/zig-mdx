@@ -8,6 +8,8 @@ An MDX (Markdown with JSX) tokenizer and parser written in Zig 0.15.
 - ✅ YAML frontmatter parsing
 - ✅ Efficient AST representation using Zig compiler patterns
 - ✅ Zero-copy tokenization
+- ✅ JSON tree serialization for easy consumption
+- ✅ WebAssembly bindings with TypeScript types
 - ✅ Comprehensive error reporting and recovery
 - ✅ No memory leaks - proper MultiArrayList management
 
@@ -69,7 +71,34 @@ const children = ast.children(0); // Document root
 for (children) |child_idx| {
     // Process child nodes...
 }
+
+// Serialize to JSON tree structure (useful for WASM/FFI)
+var json_output: std.ArrayList(u8) = .{};
+defer json_output.deinit(allocator);
+try mdx.TreeBuilder.serializeTree(&ast, &json_output, allocator);
+std.debug.print("{s}\n", .{json_output.items});
 ```
+
+### WebAssembly Usage
+
+A complete TypeScript/JavaScript package is available for web usage:
+
+```typescript
+import { parse } from 'zig-mdx';
+
+const ast = await parse('# Hello **world**');
+console.log(ast);
+// {
+//   type: "root",
+//   children: [
+//     { type: "heading", level: 1, children: [...] }
+//   ],
+//   source: "# Hello **world**",
+//   errors: []
+// }
+```
+
+See `wasm/` directory for full TypeScript package with types and examples.
 
 ## Architecture
 
@@ -100,6 +129,11 @@ src/
   Tokenizer.zig   - State machine tokenizer (502 lines)
   Ast.zig         - AST structure (311 lines)
   Parser.zig      - Recursive descent parser (782 lines)
+  TreeBuilder.zig - JSON tree serialization (323 lines)
+  wasm_exports.zig - WebAssembly bindings
+wasm/
+  src/            - TypeScript/JavaScript package
+  build.ts        - WASM build script
 research/
   ZIG_PARSER_ARCHITECTURE_RESEARCH.md - Compiler patterns analysis
   ADVANCED_PATTERNS.md - Expert techniques

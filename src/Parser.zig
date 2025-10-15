@@ -18,19 +18,19 @@ const Parser = @This();
 
 pub fn parse(gpa: Allocator, source: [:0]const u8) !Ast {
     // Phase 1: Tokenization
-    var tokens = std.ArrayList(Token).init(gpa);
-    defer tokens.deinit();
+    var tokens: std.ArrayList(Token) = .{};
+    defer tokens.deinit(gpa);
 
     var tokenizer = Tokenizer.init(source, gpa);
     defer tokenizer.deinit();
 
     // Estimate capacity based on source length (empirical ratio: 8:1)
     const estimated_token_count = @max(source.len / 8, 16);
-    try tokens.ensureTotalCapacity(estimated_token_count);
+    try tokens.ensureTotalCapacity(gpa, estimated_token_count);
 
     while (true) {
         const tok = tokenizer.next();
-        try tokens.append(tok);
+        try tokens.append(gpa, tok);
         if (tok.tag == .eof) break;
     }
 
@@ -42,7 +42,7 @@ pub fn parse(gpa: Allocator, source: [:0]const u8) !Ast {
     // Estimate node count (empirical ratio: 2:1 tokens to nodes)
     const estimated_node_count = @max(tokens.items.len / 2, 8);
     try parser.nodes.ensureTotalCapacity(gpa, estimated_node_count);
-    try parser.extra_data.ensureTotalCapacity(estimated_node_count * 2);
+    try parser.extra_data.ensureTotalCapacity(gpa, estimated_node_count * 2);
 
     const root_node = try parser.parseDocument();
     _ = root_node; // Root is always at index 0
@@ -61,8 +61,8 @@ pub fn parse(gpa: Allocator, source: [:0]const u8) !Ast {
         .source = source,
         .tokens = token_list,
         .nodes = parser.nodes,
-        .extra_data = try parser.extra_data.toOwnedSlice(),
-        .errors = try parser.errors.toOwnedSlice(),
+        .extra_data = try parser.extra_data.toOwnedSlice(gpa),
+        .errors = try parser.errors.toOwnedSlice(gpa),
     };
 }
 
@@ -82,9 +82,9 @@ fn init(gpa: Allocator, source: [:0]const u8, tokens: []const Token) Parser {
         .token_starts = token_starts,
         .token_index = 0,
         .nodes = .{},
-        .extra_data = std.ArrayList(u32).init(gpa),
-        .scratch = std.ArrayList(Ast.NodeIndex).init(gpa),
-        .errors = std.ArrayList(Ast.Error).init(gpa),
+        .extra_data = .{},
+        .scratch = .{},
+        .errors = .{},
     };
 }
 
@@ -101,7 +101,7 @@ fn deinitExceptNodes(p: *Parser) void {
     p.gpa.free(p.token_tags);
     p.gpa.free(p.token_starts);
     // DON'T deinit nodes - they've been moved to the AST
-    p.scratch.deinit();
+    p.scratch.deinit(p.gpa);
     // DON'T deinit extra_data or errors - they've been converted to owned slices
 }
 
@@ -172,7 +172,7 @@ fn addExtra(p: *Parser, value: anytype) !u32 {
     const fields = @typeInfo(T).@"struct".fields;
     const start: u32 = @intCast(p.extra_data.items.len);
 
-    try p.extra_data.ensureUnusedCapacity(fields.len);
+    try p.extra_data.ensureUnusedCapacity(p.gpa, fields.len);
     inline for (fields) |field| {
         const field_value = @field(value, field.name);
         // Handle different field sizes
@@ -189,14 +189,14 @@ fn addExtra(p: *Parser, value: anytype) !u32 {
 
 fn listToSpan(p: *Parser, items: []const Ast.NodeIndex) !Ast.Node.Range {
     const start: u32 = @intCast(p.extra_data.items.len);
-    try p.extra_data.appendSlice(@as([]const u32, @ptrCast(items)));
+    try p.extra_data.appendSlice(p.gpa, @as([]const u32, @ptrCast(items)));
     return .{ .start = start, .end = @intCast(p.extra_data.items.len) };
 }
 
 // === Error handling ===
 
 fn warn(p: *Parser, tag: Ast.Error.Tag) !void {
-    try p.errors.append(.{
+    try p.errors.append(p.gpa, .{
         .tag = tag,
         .token = p.token_index,
     });
@@ -220,7 +220,7 @@ fn parseDocument(p: *Parser) !Ast.NodeIndex {
     // Check for frontmatter
     if (p.eatToken(.frontmatter_start)) |fm_start| {
         const fm_node = try p.parseFrontmatter(fm_start);
-        try p.scratch.append(fm_node);
+        try p.scratch.append(p.gpa, fm_node);
     }
 
     // Parse top-level blocks
@@ -238,7 +238,7 @@ fn parseDocument(p: *Parser) !Ast.NodeIndex {
             return err;
         };
 
-        try p.scratch.append(block);
+        try p.scratch.append(p.gpa, block);
     }
 
     const children_span = try p.listToSpan(p.scratch.items[scratch_top..]);
@@ -370,7 +370,7 @@ fn parseInlineContent(p: *Parser, end_tag: Token.Tag) error{ OutOfMemory, ParseE
         p.token_tags[p.token_index] != .blank_line)
     {
         const inline_node = try p.parseInline();
-        try p.scratch.append(inline_node);
+        try p.scratch.append(p.gpa, inline_node);
     }
 
     _ = p.eatToken(end_tag); // consume end token
@@ -598,7 +598,7 @@ fn parseList(p: *Parser) !Ast.NodeIndex {
             });
             return err;
         };
-        try p.scratch.append(item);
+        try p.scratch.append(p.gpa, item);
     }
 
     const children_span = try p.listToSpan(p.scratch.items[scratch_top..]);
@@ -683,20 +683,45 @@ fn parseJsxElement(p: *Parser) !Ast.NodeIndex {
 
     const name = try p.expectToken(.jsx_identifier);
 
-    // Parse attributes (simplified for now)
-    while (p.token_tags[p.token_index] != .jsx_tag_end and
-        p.token_tags[p.token_index] != .jsx_self_close and
-        p.token_tags[p.token_index] != .eof)
-    {
-        p.token_index += 1; // Skip attributes for now
+    // Parse attributes
+    const attrs_start: u32 = @intCast(p.extra_data.items.len);
+    while (p.token_tags[p.token_index] == .jsx_identifier) {
+        const attr_name = p.nextToken();
+
+        // Optional = and value
+        var attr_value: Ast.OptionalTokenIndex = .none;
+        var attr_type: Ast.JsxAttributeType = .literal;
+        if (p.eatToken(.jsx_equal)) |_| {
+            if (p.eatToken(.jsx_string)) |val| {
+                attr_value = Ast.OptionalTokenIndex.init(val);
+                attr_type = .literal;
+            } else if (p.eatToken(.jsx_attr_expr_start)) |_| {
+                // Parse expression value - consume tokens until expr_end
+                const expr_content_start = p.token_index;
+                while (p.token_tags[p.token_index] != .expr_end and
+                    p.token_tags[p.token_index] != .eof)
+                {
+                    p.token_index += 1;
+                }
+                _ = try p.expectToken(.expr_end);
+                attr_value = Ast.OptionalTokenIndex.init(expr_content_start);
+                attr_type = .expression;
+            }
+        }
+
+        // Add attribute to extra_data (3 u32s per attribute)
+        try p.extra_data.append(p.gpa, attr_name);
+        try p.extra_data.append(p.gpa, @intFromEnum(attr_value));
+        try p.extra_data.append(p.gpa, @intFromEnum(attr_type));
     }
+    const attrs_end: u32 = @intCast(p.extra_data.items.len);
 
     // Check for self-closing
     if (p.eatToken(.jsx_self_close)) |_| {
         const jsx_data = try p.addExtra(Ast.JsxElement{
             .name_token = name,
-            .attrs_start = 0,
-            .attrs_end = 0,
+            .attrs_start = attrs_start,
+            .attrs_end = attrs_end,
             .children_start = 0,
             .children_end = 0,
         });
@@ -710,23 +735,60 @@ fn parseJsxElement(p: *Parser) !Ast.NodeIndex {
 
     _ = try p.expectToken(.jsx_tag_end);
 
-    // Parse children (simplified - would need to handle mixed content)
+    // Parse children - handle text, expressions, and nested JSX
     const scratch_top = p.scratch.items.len;
     defer p.scratch.shrinkRetainingCapacity(scratch_top);
 
-    // Simplified: parse until we hit closing tag
+    // Parse inline content until we hit closing tag
     while (p.token_tags[p.token_index] != .jsx_close_tag and
         p.token_tags[p.token_index] != .eof)
     {
-        if (p.token_tags[p.token_index] == .jsx_tag_start and
-            p.peekToken(1) != .jsx_close_tag)
-        {
-            const child = try p.parseBlock();
-            try p.scratch.append(child);
-        } else if (p.token_tags[p.token_index] != .jsx_close_tag) {
-            p.token_index += 1;
-        } else {
-            break;
+        const tag = p.token_tags[p.token_index];
+
+        switch (tag) {
+            .jsx_tag_start => {
+                // Check if it's a closing tag
+                if (p.peekToken(1) == .jsx_close_tag) {
+                    break;
+                }
+                // Parse nested JSX element
+                const child = try p.parseBlock();
+                try p.scratch.append(p.gpa, child);
+            },
+            .expr_start => {
+                // Parse MDX expression
+                const child = try p.parseTextExpression();
+                try p.scratch.append(p.gpa, child);
+            },
+            .text => {
+                // Parse text node
+                const child = try p.parseText();
+                try p.scratch.append(p.gpa, child);
+            },
+            .code_inline_start => {
+                // Parse inline code
+                const child = try p.parseCodeInline();
+                try p.scratch.append(p.gpa, child);
+            },
+            .strong_start => {
+                // Parse strong (bold)
+                const child = try p.parseStrong();
+                try p.scratch.append(p.gpa, child);
+            },
+            .emphasis_start => {
+                // Parse emphasis (italic)
+                const child = try p.parseEmphasis();
+                try p.scratch.append(p.gpa, child);
+            },
+            .link_start => {
+                // Parse link
+                const child = try p.parseLink();
+                try p.scratch.append(p.gpa, child);
+            },
+            else => {
+                // Skip unknown token
+                p.token_index += 1;
+            },
         }
     }
 
@@ -739,8 +801,8 @@ fn parseJsxElement(p: *Parser) !Ast.NodeIndex {
 
     const jsx_data = try p.addExtra(Ast.JsxElement{
         .name_token = name,
-        .attrs_start = 0,
-        .attrs_end = 0,
+        .attrs_start = attrs_start,
+        .attrs_end = attrs_end,
         .children_start = children_span.start,
         .children_end = children_span.end,
     });
@@ -774,7 +836,7 @@ fn parseJsxFragment(p: *Parser) !Ast.NodeIndex {
             return error.ParseError;
         }
         const child = try p.parseBlock();
-        try p.scratch.append(child);
+        try p.scratch.append(p.gpa, child);
     }
 
     const children_span = try p.listToSpan(p.scratch.items[scratch_top..]);

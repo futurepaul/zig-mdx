@@ -12,14 +12,18 @@ let wasmExports: WasmExports | null = null;
 /**
  * Initialize the WASM module
  * This is called automatically on first parse, but can be called manually for faster first parse
+ *
+ * @param customWasmPath - Optional custom path to the WASM file (useful for browser environments)
  */
-export async function init(): Promise<void> {
+export async function init(customWasmPath?: string): Promise<void> {
   if (wasmInstance !== null) {
     return; // Already initialized
   }
 
-  // Load WASM file
-  const wasmPath = new URL("./mdx.wasm", import.meta.url);
+  // Load WASM file - use custom path if provided, otherwise use default
+  const wasmPath = customWasmPath
+    ? customWasmPath
+    : new URL("./mdx.wasm", import.meta.url).toString();
 
   // Fetch and instantiate
   const wasmBuffer = await fetch(wasmPath).then((r) => r.arrayBuffer());
@@ -60,16 +64,19 @@ export async function parse(source: string): Promise<AST> {
   // Encode source to UTF-8
   const sourceBytes = encoder.encode(source);
 
-  // Allocate memory for source
-  const sourcePtr = wasmExports.wasm_alloc(sourceBytes.length);
+  // Allocate memory for source (handle empty string case)
+  const allocSize = sourceBytes.length || 1; // Allocate at least 1 byte
+  const sourcePtr = wasmExports.wasm_alloc(allocSize);
   if (sourcePtr === 0) {
     throw new Error("Failed to allocate memory for source");
   }
 
   try {
-    // Copy source to WASM memory
-    const memory = new Uint8Array(wasmExports.memory.buffer);
-    memory.set(sourceBytes, sourcePtr);
+    // Copy source to WASM memory (only if non-empty)
+    if (sourceBytes.length > 0) {
+      const memory = new Uint8Array(wasmExports.memory.buffer);
+      memory.set(sourceBytes, sourcePtr);
+    }
 
     // Allocate memory for output pointers
     const outJsonPtrPtr = wasmExports.wasm_alloc(4); // pointer to pointer
@@ -144,4 +151,4 @@ export async function getVersion(): Promise<number> {
 }
 
 // Re-export types
-export type { AST, Node, Token, ParseError } from "./types";
+export type { AST, Node, ParseError, JsxAttribute } from "./types";

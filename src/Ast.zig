@@ -139,6 +139,17 @@ pub const Error = struct {
 };
 
 /// Extra data structures for complex nodes
+pub const JsxAttributeType = enum(u32) {
+    literal, // String literal: foo="bar"
+    expression, // Expression: foo={bar}
+};
+
+pub const JsxAttribute = struct {
+    name_token: TokenIndex,
+    value_token: OptionalTokenIndex,
+    value_type: JsxAttributeType,
+};
+
 pub const JsxElement = struct {
     name_token: TokenIndex,
     attrs_start: u32,
@@ -273,6 +284,19 @@ pub fn jsxElement(tree: Ast, node_index: NodeIndex) JsxElement {
     const n = tree.nodes.get(node_index);
     std.debug.assert(n.tag == .mdx_jsx_element or n.tag == .mdx_jsx_self_closing);
     return tree.extraData(n.data.extra, JsxElement);
+}
+
+/// Get JSX attributes for an element
+pub fn jsxAttributes(tree: Ast, node_index: NodeIndex) []const JsxAttribute {
+    const elem = tree.jsxElement(node_index);
+    if (elem.attrs_start == elem.attrs_end) return &[_]JsxAttribute{};
+
+    const count = (elem.attrs_end - elem.attrs_start) / 3; // Each attr is 3 u32s
+    const attrs = std.mem.bytesAsSlice(
+        JsxAttribute,
+        std.mem.sliceAsBytes(tree.extra_data[elem.attrs_start..elem.attrs_end]),
+    );
+    return attrs[0..count];
 }
 
 /// Get heading details
