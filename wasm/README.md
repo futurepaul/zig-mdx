@@ -43,10 +43,11 @@ traverse(ast);
 ## Features
 
 - ⚡️ **Blazing Fast**: Written in Zig, compiled to WebAssembly
-- 📦 **Tiny Bundle**: < 50KB WASM binary
+- 📦 **Tiny Bundle**: ~32KB WASM binary
 - 🌳 **Full AST**: Complete Abstract Syntax Tree with all node types
 - 🎯 **Type Safe**: Full TypeScript support with detailed types
 - 🔧 **Zero Dependencies**: No runtime dependencies
+- 🔄 **Auto-initializing**: WASM loads automatically on first parse
 
 ## API
 
@@ -54,11 +55,68 @@ traverse(ast);
 
 Parses an MDX string and returns a nested tree structure representing the Abstract Syntax Tree.
 
+The WASM module is initialized automatically on first call, so you can just start parsing immediately.
+
 **Parameters:**
 - `source`: The MDX source code to parse
 
 **Returns:**
 - A Promise resolving to an `AST` object with a nested tree structure
+
+**Example:**
+```typescript
+const ast = await parse('# Hello World');
+console.log(ast.children[0].type); // "heading"
+```
+
+### `init(customWasmPath?: string): Promise<void>`
+
+Manually initialize the WASM module. This is optional - `parse()` calls it automatically.
+
+Use this to:
+- **Pre-warm** the parser to avoid first-parse latency
+- **Custom WASM paths** for different bundler configurations
+
+**Parameters:**
+- `customWasmPath` (optional): Custom path to the WASM file
+
+**Example:**
+```typescript
+// Pre-initialize for faster first parse
+await init();
+
+// Or with custom WASM path for specific bundler setups
+await init('/public/mdx.wasm');
+```
+
+### `reset(): Promise<void>`
+
+Frees all allocated WASM memory. Useful for long-running processes that parse many files.
+
+Call this periodically if you're parsing thousands of files to prevent memory buildup.
+
+**Example:**
+```typescript
+for (const file of largeFileSet) {
+  const ast = await parse(file.content);
+  processAst(ast);
+}
+// Free accumulated memory
+await reset();
+```
+
+### `getVersion(): Promise<number>`
+
+Returns the version number of the WASM module.
+
+**Returns:**
+- A Promise resolving to the version number
+
+**Example:**
+```typescript
+const version = await getVersion();
+console.log(`WASM module version: ${version}`);
+```
 
 ### AST Structure
 
@@ -150,30 +208,30 @@ type ThematicBreakNode = { type: "hr" }
 
 ## Supported MDX Features
 
-- ✅ Headings (ATX style `#` and Setext style)
+- ✅ Headings (`#`, `##`, `###`, etc.)
 - ✅ Paragraphs and line breaks
-- ✅ Emphasis and strong emphasis (`*` and `_`)
-- ✅ Links and images
+- ✅ Emphasis and strong emphasis (`*`, `**`, `_`, `__`)
+- ✅ Links and images (`[text](url)`, `![alt](url)`)
 - ✅ Lists (ordered and unordered)
-- ✅ Blockquotes
-- ✅ Code blocks (fenced and indented)
-- ✅ Inline code
-- ✅ JSX elements (`<Component />`)
-- ✅ JSX expressions (`{expression}`)
-- ✅ YAML frontmatter
-- ✅ Horizontal rules
-- ✅ HTML blocks
-- ✅ Tables (GFM)
-- ✅ Strikethrough (GFM)
-- ✅ Task lists (GFM)
+- ✅ Blockquotes (`>`)
+- ✅ Code blocks (fenced with ` ``` `)
+- ✅ Inline code (`` `code` ``)
+- ✅ JSX elements (`<Component />`, `<Component>children</Component>`)
+- ✅ JSX fragments (`<>...</>`)
+- ✅ JSX attributes with expressions
+- ✅ MDX expressions (`{expression}`)
+- ✅ YAML frontmatter (`---`)
+- ✅ Horizontal rules (`---`, `***`, `___`)
+- ✅ ESM imports and exports
 
 ## Performance
 
-Built with Zig and compiled to WebAssembly for maximum performance. Typical parsing times:
+Built with Zig and compiled to WebAssembly for maximum performance. The parser is designed for:
 
-- Small files (< 1KB): < 1ms
-- Medium files (10KB): < 5ms
-- Large files (100KB): < 50ms
+- **Fast parsing**: Zero-copy tokenization with efficient memory management
+- **Small bundle size**: Only ~32KB WASM binary (+ ~3KB JavaScript wrapper)
+- **Memory efficient**: Proper cleanup with `reset()` for long-running processes
+- **Browser-ready**: Works in all modern browsers and Node.js 18+
 
 ## License
 
