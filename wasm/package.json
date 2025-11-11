@@ -35,16 +35,16 @@
     "fast",
     "performance"
   ],
-  "author": "",
+  "author": "Paul Miller",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/zig-mdx.git"
+    "url": "https://github.com/futurepaul/zig-mdx.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/zig-mdx/issues"
+    "url": "https://github.com/futurepaul/zig-mdx/issues"
   },
-  "homepage": "https://github.com/yourusername/zig-mdx#readme",
+  "homepage": "https://github.com/futurepaul/zig-mdx#readme",
   "devDependencies": {
     "@types/bun": "latest",
     "typescript": "^5.7.0"

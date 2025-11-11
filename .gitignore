@@ -11,6 +11,9 @@ zig-out/
 .DS_Store
 test_comprehensive
 test_tokenizer
+test_code_blocks
+test_inline_code_images
+test_tree_builder
 
 # WASM package
 wasm/node_modules/
