@@ -38,6 +38,7 @@ pub const Tag = enum {
     link_url_start, // (
     link_url_end, // )
     image_start, // ![
+    hard_break, // Two trailing spaces + \n or backslash + \n
 
     // MDX Expression tokens
     expr_start, // {

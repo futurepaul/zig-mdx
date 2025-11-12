@@ -343,8 +343,8 @@ fn parseParagraph(p: *Parser) !Ast.NodeIndex {
     // Reserve node
     const node_index = try p.reserveNode(.paragraph);
 
-    // Parse inline content until newline or blank line
-    const children_span = p.parseInlineContent(.newline) catch |err| {
+    // Parse inline content until blank line (double newline)
+    const children_span = p.parseInlineContent(.blank_line) catch |err| {
         // Set node with empty children to avoid leaving incomplete node
         _ = p.setNode(node_index, .{
             .tag = .paragraph,
@@ -369,6 +369,12 @@ fn parseInlineContent(p: *Parser, end_tag: Token.Tag) error{ OutOfMemory, ParseE
         p.token_tags[p.token_index] != .eof and
         p.token_tags[p.token_index] != .blank_line)
     {
+        // Skip newlines within inline content (soft breaks)
+        if (p.token_tags[p.token_index] == .newline) {
+            _ = p.nextToken();
+            continue;
+        }
+
         const inline_node = try p.parseInline();
         try p.scratch.append(p.gpa, inline_node);
     }
@@ -386,6 +392,7 @@ fn parseInline(p: *Parser) !Ast.NodeIndex {
         .code_inline_start => p.parseCodeInline(),
         .link_start => p.parseLink(),
         .image_start => p.parseImage(),
+        .hard_break => p.parseHardBreak(),
         .expr_start => p.parseTextExpression(),
         .jsx_tag_start => p.parseJsxElement(),
         else => {
@@ -401,6 +408,15 @@ fn parseText(p: *Parser) !Ast.NodeIndex {
     return p.addNode(.{
         .tag = .text,
         .main_token = text_token,
+        .data = .{ .none = {} },
+    });
+}
+
+fn parseHardBreak(p: *Parser) !Ast.NodeIndex {
+    const break_token = p.nextToken();
+    return p.addNode(.{
+        .tag = .hard_break,
+        .main_token = break_token,
         .data = .{ .none = {} },
     });
 }

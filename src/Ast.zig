@@ -76,6 +76,7 @@ pub const Node = struct {
         code_inline,
         link,
         image,
+        hard_break,
 
         // MDX expression nodes
         mdx_text_expression, // {expr} inline

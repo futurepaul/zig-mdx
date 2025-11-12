@@ -147,6 +147,32 @@ fn nextMarkdown(self: *Tokenizer) Token {
                         self.line_start = self.index;
                         return self.makeToken(.newline, start);
                     },
+                    '\\' => {
+                        // Check if this is a hard break (backslash followed by newline)
+                        if (self.index + 1 < self.buffer.len and self.buffer[self.index + 1] == '\n') {
+                            self.index += 2; // Skip backslash and newline
+                            self.line_start = self.index;
+                            return self.makeToken(.hard_break, start);
+                        }
+                        // Otherwise treat as text
+                        state = .text;
+                    },
+                    ' ' => {
+                        // Check if this is a hard break (two+ spaces followed by newline)
+                        var space_count: u32 = 0;
+                        var temp_idx = self.index;
+                        while (temp_idx < self.buffer.len and self.buffer[temp_idx] == ' ') {
+                            space_count += 1;
+                            temp_idx += 1;
+                        }
+                        if (space_count >= 2 and temp_idx < self.buffer.len and self.buffer[temp_idx] == '\n') {
+                            self.index = temp_idx + 1; // Skip spaces and newline
+                            self.line_start = self.index;
+                            return self.makeToken(.hard_break, start);
+                        }
+                        // Otherwise treat as text
+                        state = .text;
+                    },
                     '{' => {
                         self.index += 1;
                         self.pushMode(.expression) catch {
@@ -290,6 +316,39 @@ fn nextMarkdown(self: *Tokenizer) Token {
                         else => self.index += 1,
                     }
                 }
+
+                // Check if we have a hard break pattern at the end
+                // (trailing spaces or backslash before newline)
+                if (self.index < self.buffer.len and self.buffer[self.index] == '\n') {
+                    // Check for backslash immediately before newline
+                    if (self.index > start and self.buffer[self.index - 1] == '\\') {
+                        self.index -= 1; // Don't include the backslash in text
+                        // If this left us with an empty text token, skip to hard_break
+                        if (self.index == start) {
+                            self.index += 2; // Skip backslash and newline
+                            self.line_start = self.index;
+                            return self.makeToken(.hard_break, start);
+                        }
+                    } else {
+                        // Check for two+ trailing spaces
+                        var end_idx = self.index;
+                        var spaces: u32 = 0;
+                        while (end_idx > start and self.buffer[end_idx - 1] == ' ') {
+                            spaces += 1;
+                            end_idx -= 1;
+                        }
+                        if (spaces >= 2) {
+                            // If text would be empty, emit hard_break directly
+                            if (end_idx == start) {
+                                self.index += 1; // Skip the newline
+                                self.line_start = self.index;
+                                return self.makeToken(.hard_break, start);
+                            }
+                            self.index = end_idx; // Don't include trailing spaces in text
+                        }
+                    }
+                }
+
                 return self.makeToken(.text, start);
             },
 
