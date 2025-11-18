@@ -13,20 +13,56 @@ let wasmExports: WasmExports | null = null;
  * Initialize the WASM module
  * This is called automatically on first parse, but can be called manually for faster first parse
  *
- * @param customWasmPath - Optional custom path to the WASM file (useful for browser environments)
+ * @param wasmSource - Optional WASM source: ArrayBuffer, URL string, or Response. If not provided, loads bundled WASM file
  */
-export async function init(customWasmPath?: string): Promise<void> {
+export async function init(wasmSource?: ArrayBuffer | string | Response): Promise<void> {
   if (wasmInstance !== null) {
     return; // Already initialized
   }
 
-  // Load WASM file - use custom path if provided, otherwise use default
-  const wasmPath = customWasmPath
-    ? customWasmPath
-    : new URL("./mdx.wasm", import.meta.url).toString();
+  let wasmBuffer: ArrayBuffer | SharedArrayBuffer;
 
-  // Fetch and instantiate
-  const wasmBuffer = await fetch(wasmPath).then((r) => r.arrayBuffer());
+  if (wasmSource === undefined) {
+    // Default: Load bundled WASM file using import.meta.url
+    // This works with most modern bundlers (Vite, Webpack 5+, esbuild, etc.)
+    const wasmUrl = new URL("./mdx.wasm", import.meta.url);
+
+    // Try Node.js fs first (if available), otherwise use fetch
+    if (typeof process !== "undefined" && process.versions?.node) {
+      try {
+        const fs = await import("fs/promises");
+        const { fileURLToPath } = await import("url");
+        const wasmPath = fileURLToPath(wasmUrl);
+        const buffer = await fs.readFile(wasmPath);
+        wasmBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+      } catch {
+        // Fall back to fetch if fs fails
+        wasmBuffer = await fetch(wasmUrl.toString()).then((r) => r.arrayBuffer());
+      }
+    } else {
+      // Browser/Deno/Bun environment
+      wasmBuffer = await fetch(wasmUrl.toString()).then((r) => r.arrayBuffer());
+    }
+  } else if (wasmSource instanceof ArrayBuffer) {
+    // User provided ArrayBuffer directly
+    wasmBuffer = wasmSource;
+  } else if (typeof wasmSource === "string") {
+    // User provided URL/path string
+    if (typeof process !== "undefined" && process.versions?.node && !wasmSource.startsWith("http")) {
+      // Node.js file path
+      const fs = await import("fs/promises");
+      const buffer = await fs.readFile(wasmSource);
+      wasmBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+    } else {
+      // URL (http/https) or fetch-able path
+      wasmBuffer = await fetch(wasmSource).then((r) => r.arrayBuffer());
+    }
+  } else {
+    // User provided Response object
+    wasmBuffer = await wasmSource.arrayBuffer();
+  }
+
+  // Compile and instantiate
   wasmModule = await WebAssembly.compile(wasmBuffer);
   wasmInstance = await WebAssembly.instantiate(wasmModule, {});
 
